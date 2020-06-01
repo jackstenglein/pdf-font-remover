@@ -27,13 +27,17 @@ class Document:
         """
         __init__ opens the given file and creates necessary structures to provide byte reading.
         """
-        try:
-            self.infile = open(file, 'rb')
-            self.ungetted = []
-        except:
-            print('Error opening file %s' % file)
-            print(sys.exc_info()[1])
-            sys.exit()
+
+        self.ungetted = []
+        if type(file) != str:
+            self.infile = file
+        else:
+            try:
+                self.infile = open(file, 'rb')
+            except:
+                print('Error opening file %s' % file)
+                print(sys.exc_info()[1])
+                sys.exit()
 
     def byte(self):
         """
@@ -64,6 +68,10 @@ class Tokenizer:
     """
 
     def __init__(self, file):
+        """
+        __init__ creates data structures needed to tokenize the file.
+        """
+
         self.pdf = Document(file)
         self.ungetted = []
         self.finished = False
@@ -81,6 +89,10 @@ class Tokenizer:
         return CHAR_REGULAR
 
     def Token(self):
+        """
+        Token returns the next token in the PDF file.
+        """
+
         if len(self.ungetted) != 0:
             return self.ungetted.pop()
 
@@ -149,12 +161,20 @@ class Tokenizer:
             return (CHAR_DELIMITER, chr(byte))
 
     def TokenIgnoreWhiteSpace(self):
+        """
+        TokenIgnoreWhiteSpace returns the next non-whitespace token in the PDF file.
+        """
+
         token = self.Token()
         while token != None and token[0] == CHAR_WHITESPACE:
             token = self.Token()
         return token
 
     def Tokens(self):
+        """
+        Tokens returns a list of all tokens in the PDF file.
+        """
+
         tokens = []
         token = self.Token()
         while token != None:
@@ -162,8 +182,12 @@ class Tokenizer:
             token = self.Token()
         return tokens
 
-    def unget(self, byte):
-        self.ungetted.append(byte)
+    def unget(self, token):
+        """
+        unget saves the given token to be returned in the next call to Token.
+        """
+    
+        self.ungetted.append(token)
 
 
 class cPDFParser:
