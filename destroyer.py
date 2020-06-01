@@ -1,5 +1,8 @@
+
+import parser
 import runner
 from io import StringIO
+import re
 
 CHAR_WHITESPACE = 1
 CHAR_DELIMITER = 2
@@ -72,7 +75,7 @@ class FontDestroyer:
         decoders = []
         runner.LoadDecoders(self.options.decoders, True)
 
-        oPDFParser = runner.cPDFParser(document, self.verbose, self.extract)
+        oPDFParser = parser.cPDFParser(document, self.verbose, self.extract)
         dicObjectTypes = {}
 
     
@@ -86,8 +89,7 @@ class FontDestroyer:
             print('https://DidierStevens.com')
             print('Use at your own risk')
             print('')
-            print('Input PDF file: %s' % args[0])
-            print('This Python program was created on: %s' % Timestamp())
+            print('Input PDF file: %s' % document)
             print('')
             print('"""')
             print('')
@@ -113,7 +115,7 @@ class FontDestroyer:
                 
             
             if self.options.objstm and hasattr(object, 'GetType') and runner.EqualCanonical(object.GetType(), '/ObjStm') and object.ContainsStream():
-                # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then parsed by runner.cPDFParser
+                # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then parsed by parser.cPDFParser
                 oPDFParseDictionary = runner.cPDFParseDictionary(object.ContainsStream(), self.options.nocanonicalizedoutput)
                 numberOfObjects = int(oPDFParseDictionary.Get('/N')[0])
                 offsetFirstObject = int(oPDFParseDictionary.Get('/First')[0])
@@ -131,7 +133,7 @@ class FontDestroyer:
                     else:
                         offsetNextObject = len(streamObject)
                     synthesizedPDF += '%d 0 obj\n%s\nendobj\n' % (objectNumber, streamObject[offset:offsetNextObject])
-                oPDFParserOBJSTM = runner.cPDFParser(StringIO(synthesizedPDF), self.options.verbose, self.options.extract, (object.id, object.version))
+                oPDFParserOBJSTM = parser.cPDFParser(StringIO(synthesizedPDF), self.options.verbose, self.options.extract, (object.id, object.version))
             
             if object != None:
                 if self.options.stats:
