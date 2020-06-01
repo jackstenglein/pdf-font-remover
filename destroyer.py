@@ -66,7 +66,6 @@ class FontDestroyer:
     def UpdatePDF(self, document):
         """pdf-parser, use it to parse a PDF document
         """
-        print("Test")
 
 
         global decoders
@@ -115,7 +114,7 @@ class FontDestroyer:
                 
             
             if self.options.objstm and hasattr(object, 'GetType') and runner.EqualCanonical(object.GetType(), '/ObjStm') and object.ContainsStream():
-                # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then parsed by parser.cPDFParser
+                # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then itself parsed
                 oPDFParseDictionary = runner.cPDFParseDictionary(object.ContainsStream(), self.options.nocanonicalizedoutput)
                 numberOfObjects = int(oPDFParseDictionary.Get('/N')[0])
                 offsetFirstObject = int(oPDFParseDictionary.Get('/First')[0])
@@ -133,7 +132,7 @@ class FontDestroyer:
                     else:
                         offsetNextObject = len(streamObject)
                     synthesizedPDF += '%d 0 obj\n%s\nendobj\n' % (objectNumber, streamObject[offset:offsetNextObject])
-                oPDFParserOBJSTM = parser.cPDFParser(StringIO(synthesizedPDF), self.options.verbose, self.options.extract, (object.id, object.version))
+                oPDFParserOBJSTM = parser.Parser(StringIO(synthesizedPDF), self.options.verbose, self.options.extract, (object.id, object.version))
             
             if object != None:
                 if self.options.stats:
