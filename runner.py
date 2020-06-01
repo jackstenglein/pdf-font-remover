@@ -1262,291 +1262,242 @@ def HexAsciiDumpLine(data):
 def MatchObjectID(id, selection):
     return str(id) in selection.split(',')
 
-def GetArguments():
-    arguments = sys.argv[1:]
-    envvar = os.getenv('PDFPARSER_OPTIONS')
-    if envvar == None:
-        return arguments
-    return envvar.split(' ') + arguments
 
-def Main():
+def Parse():
     """pdf-parser, use it to parse a PDF document
     """
 
     global decoders
 
-    oParser = optparse.OptionParser(usage='usage: %prog [options] pdf-file|zip-file|url\n' + __description__, version='%prog ' + __version__)
-    oParser.add_option('-m', '--man', action='store_true', default=False, help='Print manual')
-    oParser.add_option('-s', '--search', help='string to search in indirect objects (except streams)')
-    oParser.add_option('-f', '--filter', action='store_true', default=False, help='pass stream object through filters (FlateDecode, ASCIIHexDecode, ASCII85Decode, LZWDecode and RunLengthDecode only)')
-    oParser.add_option('-o', '--object', help='id(s) of indirect object(s) to select, use comma (,) to separate ids (version independent)')
-    oParser.add_option('-r', '--reference', help='id of indirect object being referenced (version independent)')
-    oParser.add_option('-e', '--elements', help='type of elements to select (cxtsi)')
-    oParser.add_option('-w', '--raw', action='store_true', default=False, help='raw output for data and filters')
-    oParser.add_option('-a', '--stats', action='store_true', default=False, help='display stats for pdf document')
-    oParser.add_option('-t', '--type', help='type of indirect object to select')
-    oParser.add_option('-O', '--objstm', action='store_true', default=False, help='parse stream of /ObjStm objects')
-    oParser.add_option('-v', '--verbose', action='store_true', default=False, help='display malformed PDF elements')
-    oParser.add_option('-x', '--extract', help='filename to extract malformed content to')
-    oParser.add_option('-H', '--hash', action='store_true', default=False, help='display hash of objects')
-    oParser.add_option('-n', '--nocanonicalizedoutput', action='store_true', default=False, help='do not canonicalize the output')
-    oParser.add_option('-d', '--dump', help='filename to dump stream content to')
-    oParser.add_option('-D', '--debug', action='store_true', default=False, help='display debug info')
-    oParser.add_option('-c', '--content', action='store_true', default=False, help='display the content for objects without streams or with streams without filters')
-    oParser.add_option('--searchstream', help='string to search in streams')
-    oParser.add_option('--unfiltered', action='store_true', default=False, help='search in unfiltered streams')
-    oParser.add_option('--casesensitive', action='store_true', default=False, help='case sensitive search in streams')
-    oParser.add_option('--regex', action='store_true', default=False, help='use regex to search in streams')
-    oParser.add_option('--overridingfilters', type=str, default='', help='override filters with given filters (use raw for the raw stream content)')
-    oParser.add_option('-g', '--generate', action='store_true', default=False, help='generate a Python program that creates the parsed PDF file')
-    oParser.add_option('--generateembedded', type=int, default=0, help='generate a Python program that embeds the selected indirect object as a file')
-    oParser.add_option('--decoders', type=str, default='', help='decoders to load (separate decoders with a comma , ; @file supported)')
-    oParser.add_option('--decoderoptions', type=str, default='', help='options for the decoder')
-    oParser.add_option('-k', '--key', help='key to search in dictionaries')
-    (options, args) = oParser.parse_args(GetArguments())
 
-    if options.man:
-        oParser.print_help()
-        PrintManual()
-        return 0
+    decoders = []
+    LoadDecoders(options.decoders, True)
 
-    if len(args) != 1:
-        oParser.print_help()
-        print('')
-        print('  %s' % __description__)
-        print('  Source code put in the public domain by Didier Stevens, no Copyright')
-        print('  Use at your own risk')
-        print('  https://DidierStevens.com')
+    oPDFParser = cPDFParser(args[0], options.verbose, options.extract)
+    cntComment = 0
+    cntXref = 0
+    cntTrailer = 0
+    cntStartXref = 0
+    cntIndirectObject = 0
+    dicObjectTypes = {}
 
-    else:
-        decoders = []
-        LoadDecoders(options.decoders, True)
-
-        oPDFParser = cPDFParser(args[0], options.verbose, options.extract)
-        cntComment = 0
-        cntXref = 0
-        cntTrailer = 0
-        cntStartXref = 0
-        cntIndirectObject = 0
-        dicObjectTypes = {}
-
-        selectComment = False
-        selectXref = False
-        selectTrailer = False
-        selectStartXref = False
-        selectIndirectObject = False
-        if options.elements:
-            for c in options.elements:
-                if c == 'c':
-                    selectComment = True
-                elif c == 'x':
-                    selectXref = True
-                elif c == 't':
-                    selectTrailer = True
-                elif c == 's':
-                    selectStartXref = True
-                elif c == 'i':
-                    selectIndirectObject = True
-                else:
-                    print('Error: unknown --elements value %s' % c)
-                    return
-        else:
-            selectIndirectObject = True
-            if not options.search and not options.object and not options.reference and not options.type and not options.searchstream and not options.key:
+    selectComment = False
+    selectXref = False
+    selectTrailer = False
+    selectStartXref = False
+    selectIndirectObject = False
+    if options.elements:
+        for c in options.elements:
+            if c == 'c':
                 selectComment = True
+            elif c == 'x':
                 selectXref = True
+            elif c == 't':
                 selectTrailer = True
+            elif c == 's':
                 selectStartXref = True
-            if options.search or options.key or options.reference:
-                selectTrailer = True
-
-        if options.type == '-':
-            optionsType = ''
-        else:
-            optionsType = options.type
-
-        if options.generate:
-            savedRoot = ['1', '0', 'R']
-            print('#!/usr/bin/python')
-            print('')
-            print('"""')
-            print('')
-            print('Program generated by pdf-parser.py by Didier Stevens')
-            print('https://DidierStevens.com')
-            print('Use at your own risk')
-            print('')
-            print('Input PDF file: %s' % args[0])
-            print('This Python program was created on: %s' % Timestamp())
-            print('')
-            print('"""')
-            print('')
-            print('import mPDF')
-            print('import sys')
-            print('')
-            print('def Main():')
-            print('    if len(sys.argv) != 2:')
-            print("        print('Usage: %s pdf-file' % sys.argv[0])")
-            print('        return')
-            print('    oPDF = mPDF.cPDF(sys.argv[1])')
-
-
-        oPDFParserOBJSTM = None
-        while True:
-            if oPDFParserOBJSTM == None:
-                object = oPDFParser.GetObject()
+            elif c == 'i':
+                selectIndirectObject = True
             else:
-                object = oPDFParserOBJSTM.GetObject()
-                if object == None:
-                    oPDFParserOBJSTM = None
-                    object = oPDFParser.GetObject()
-                
+                print('Error: unknown --elements value %s' % c)
+                return
+    else:
+        selectIndirectObject = True
+        if not options.search and not options.object and not options.reference and not options.type and not options.searchstream and not options.key:
+            selectComment = True
+            selectXref = True
+            selectTrailer = True
+            selectStartXref = True
+        if options.search or options.key or options.reference:
+            selectTrailer = True
+
+    if options.type == '-':
+        optionsType = ''
+    else:
+        optionsType = options.type
+
+    if options.generate:
+        savedRoot = ['1', '0', 'R']
+        print('#!/usr/bin/python')
+        print('')
+        print('"""')
+        print('')
+        print('Program generated by pdf-parser.py by Didier Stevens')
+        print('https://DidierStevens.com')
+        print('Use at your own risk')
+        print('')
+        print('Input PDF file: %s' % args[0])
+        print('This Python program was created on: %s' % Timestamp())
+        print('')
+        print('"""')
+        print('')
+        print('import mPDF')
+        print('import sys')
+        print('')
+        print('def Main():')
+        print('    if len(sys.argv) != 2:')
+        print("        print('Usage: %s pdf-file' % sys.argv[0])")
+        print('        return')
+        print('    oPDF = mPDF.cPDF(sys.argv[1])')
+
+
+    oPDFParserOBJSTM = None
+    while True:
+        if oPDFParserOBJSTM == None:
+            object = oPDFParser.GetObject()
+        else:
+            object = oPDFParserOBJSTM.GetObject()
+            if object == None:
+                oPDFParserOBJSTM = None
+                object = oPDFParser.GetObject()
             
-            if options.objstm and hasattr(object, 'GetType') and EqualCanonical(object.GetType(), '/ObjStm') and object.ContainsStream():
-                # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then parsed by cPDFParser
-                oPDFParseDictionary = cPDFParseDictionary(object.ContainsStream(), options.nocanonicalizedoutput)
-                numberOfObjects = int(oPDFParseDictionary.Get('/N')[0])
-                offsetFirstObject = int(oPDFParseDictionary.Get('/First')[0])
-                indexes = list(map(int, C2SIP3(object.Stream())[:offsetFirstObject].strip().split(' ')))
-                if len(indexes) % 2 != 0 or len(indexes) / 2 != numberOfObjects:
-                    raise Exception('Error in index of /ObjStm stream')
-                streamObject = C2SIP3(object.Stream()[offsetFirstObject:])
-                synthesizedPDF = ''
-                while len(indexes) > 0:
-                    objectNumber = indexes[0]
-                    offset = indexes[1]
-                    indexes = indexes[2:]
-                    if len(indexes) >= 2:
-                        offsetNextObject = indexes[1]
-                    else:
-                        offsetNextObject = len(streamObject)
-                    synthesizedPDF += '%d 0 obj\n%s\nendobj\n' % (objectNumber, streamObject[offset:offsetNextObject])
-                oPDFParserOBJSTM = cPDFParser(StringIO(synthesizedPDF), options.verbose, options.extract, (object.id, object.version))
-            
-            if object != None:
-                if options.stats:
-                    if object.type == PDF_ELEMENT_COMMENT:
-                        cntComment += 1
-                    elif object.type == PDF_ELEMENT_XREF:
-                        cntXref += 1
-                    elif object.type == PDF_ELEMENT_TRAILER:
-                        cntTrailer += 1
-                    elif object.type == PDF_ELEMENT_STARTXREF:
-                        cntStartXref += 1
-                    elif object.type == PDF_ELEMENT_INDIRECT_OBJECT:
-                        cntIndirectObject += 1
-                        type1 = object.GetType()
-                        if not type1 in dicObjectTypes:
-                            dicObjectTypes[type1] = [object.id]
-                        else:
-                            dicObjectTypes[type1].append(object.id)
+        
+        if options.objstm and hasattr(object, 'GetType') and EqualCanonical(object.GetType(), '/ObjStm') and object.ContainsStream():
+            # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then parsed by cPDFParser
+            oPDFParseDictionary = cPDFParseDictionary(object.ContainsStream(), options.nocanonicalizedoutput)
+            numberOfObjects = int(oPDFParseDictionary.Get('/N')[0])
+            offsetFirstObject = int(oPDFParseDictionary.Get('/First')[0])
+            indexes = list(map(int, C2SIP3(object.Stream())[:offsetFirstObject].strip().split(' ')))
+            if len(indexes) % 2 != 0 or len(indexes) / 2 != numberOfObjects:
+                raise Exception('Error in index of /ObjStm stream')
+            streamObject = C2SIP3(object.Stream()[offsetFirstObject:])
+            synthesizedPDF = ''
+            while len(indexes) > 0:
+                objectNumber = indexes[0]
+                offset = indexes[1]
+                indexes = indexes[2:]
+                if len(indexes) >= 2:
+                    offsetNextObject = indexes[1]
                 else:
-                    if object.type == PDF_ELEMENT_COMMENT and selectComment:
-                        if options.generate:
-                            comment = object.comment[1:].rstrip()
-                            if re.match('PDF-\d\.\d', comment):
-                                print("    oPDF.header('%s')" % comment[4:])
-                            elif comment != '%EOF':
-                                print('    oPDF.comment(%s)' % repr(comment))
+                    offsetNextObject = len(streamObject)
+                synthesizedPDF += '%d 0 obj\n%s\nendobj\n' % (objectNumber, streamObject[offset:offsetNextObject])
+            oPDFParserOBJSTM = cPDFParser(StringIO(synthesizedPDF), options.verbose, options.extract, (object.id, object.version))
+        
+        if object != None:
+            if options.stats:
+                if object.type == PDF_ELEMENT_COMMENT:
+                    cntComment += 1
+                elif object.type == PDF_ELEMENT_XREF:
+                    cntXref += 1
+                elif object.type == PDF_ELEMENT_TRAILER:
+                    cntTrailer += 1
+                elif object.type == PDF_ELEMENT_STARTXREF:
+                    cntStartXref += 1
+                elif object.type == PDF_ELEMENT_INDIRECT_OBJECT:
+                    cntIndirectObject += 1
+                    type1 = object.GetType()
+                    if not type1 in dicObjectTypes:
+                        dicObjectTypes[type1] = [object.id]
+                    else:
+                        dicObjectTypes[type1].append(object.id)
+            else:
+                if object.type == PDF_ELEMENT_COMMENT and selectComment:
+                    if options.generate:
+                        comment = object.comment[1:].rstrip()
+                        if re.match('PDF-\d\.\d', comment):
+                            print("    oPDF.header('%s')" % comment[4:])
+                        elif comment != '%EOF':
+                            print('    oPDF.comment(%s)' % repr(comment))
+                    else:
+                        print('PDF Comment %s' % FormatOutput(object.comment, options.raw))
+                        print('')
+                elif object.type == PDF_ELEMENT_XREF and selectXref:
+                    if not options.generate:
+                        if options.debug:
+                            print('xref %s' % FormatOutput(object.content, options.raw))
                         else:
-                            print('PDF Comment %s' % FormatOutput(object.comment, options.raw))
-                            print('')
-                    elif object.type == PDF_ELEMENT_XREF and selectXref:
-                        if not options.generate:
-                            if options.debug:
-                                print('xref %s' % FormatOutput(object.content, options.raw))
+                            print('xref')
+                        print('')
+                elif object.type == PDF_ELEMENT_TRAILER and selectTrailer:
+                    oPDFParseDictionary = cPDFParseDictionary(object.content[1:], options.nocanonicalizedoutput)
+                    if options.generate:
+                        result = oPDFParseDictionary.Get('/Root')
+                        if result != None:
+                            savedRoot = result
+                    else:
+                        if not options.search and not options.key and not options.reference or options.search and object.Contains(options.search):
+                            if oPDFParseDictionary == None:
+                                print('trailer %s' % FormatOutput(object.content, options.raw))
                             else:
-                                print('xref')
+                                print('trailer')
+                                oPDFParseDictionary.PrettyPrint('  ')
                             print('')
-                    elif object.type == PDF_ELEMENT_TRAILER and selectTrailer:
-                        oPDFParseDictionary = cPDFParseDictionary(object.content[1:], options.nocanonicalizedoutput)
-                        if options.generate:
-                            result = oPDFParseDictionary.Get('/Root')
-                            if result != None:
-                                savedRoot = result
-                        else:
-                            if not options.search and not options.key and not options.reference or options.search and object.Contains(options.search):
-                                if oPDFParseDictionary == None:
-                                    print('trailer %s' % FormatOutput(object.content, options.raw))
-                                else:
-                                    print('trailer')
-                                    oPDFParseDictionary.PrettyPrint('  ')
-                                print('')
-                            elif options.key:
-                                if oPDFParseDictionary.parsed != None:
-                                    result = oPDFParseDictionary.GetNested(options.key)
-                                    if result != None:
-                                        print(result)
-                            elif options.reference:
-                                for key, value in oPDFParseDictionary.Retrieve():
-                                    if value == [str(options.reference), '0', 'R']:
-                                        print('trailer')
-                                        oPDFParseDictionary.PrettyPrint('  ')
-                    elif object.type == PDF_ELEMENT_STARTXREF and selectStartXref:
-                        if not options.generate:
-                            print('startxref %d' % object.index)
-                            print('')
-                    elif object.type == PDF_ELEMENT_INDIRECT_OBJECT and selectIndirectObject:
-                        if options.search:
-                            if object.Contains(options.search):
-                                PrintObject(object, options)
                         elif options.key:
-                            contentDictionary = object.ContainsStream()
-                            if not contentDictionary:
-                                contentDictionary = object.content[1:]
-                            oPDFParseDictionary = cPDFParseDictionary(contentDictionary, options.nocanonicalizedoutput)
                             if oPDFParseDictionary.parsed != None:
                                 result = oPDFParseDictionary.GetNested(options.key)
                                 if result != None:
                                     print(result)
-                        elif options.object:
-                            if MatchObjectID(object.id, options.object):
-                                PrintObject(object, options)
                         elif options.reference:
-                            if object.References(options.reference):
-                                PrintObject(object, options)
-                        elif options.type:
-                            if EqualCanonical(object.GetType(), optionsType):
-                                PrintObject(object, options)
-                        elif options.hash:
-                            print('obj %d %d' % (object.id, object.version))
-                            rawContent = FormatOutput(object.content, True)
-                            print(' len: %d md5: %s' % (len(rawContent), hashlib.md5(rawContent).hexdigest()))
-                            print('')
-                        elif options.searchstream:
-                            if object.StreamContains(options.searchstream, not options.unfiltered, options.casesensitive, options.regex, options.overridingfilters):
-                                PrintObject(object, options)
-                        elif options.generateembedded != 0:
-                            if object.id == options.generateembedded:
-                                PrintGenerateObject(object, options, 8)
-                        else:
+                            for key, value in oPDFParseDictionary.Retrieve():
+                                if value == [str(options.reference), '0', 'R']:
+                                    print('trailer')
+                                    oPDFParseDictionary.PrettyPrint('  ')
+                elif object.type == PDF_ELEMENT_STARTXREF and selectStartXref:
+                    if not options.generate:
+                        print('startxref %d' % object.index)
+                        print('')
+                elif object.type == PDF_ELEMENT_INDIRECT_OBJECT and selectIndirectObject:
+                    if options.search:
+                        if object.Contains(options.search):
                             PrintObject(object, options)
-                    elif object.type == PDF_ELEMENT_MALFORMED:
+                    elif options.key:
+                        contentDictionary = object.ContainsStream()
+                        if not contentDictionary:
+                            contentDictionary = object.content[1:]
+                        oPDFParseDictionary = cPDFParseDictionary(contentDictionary, options.nocanonicalizedoutput)
+                        if oPDFParseDictionary.parsed != None:
+                            result = oPDFParseDictionary.GetNested(options.key)
+                            if result != None:
+                                print(result)
+                    elif options.object:
+                        if MatchObjectID(object.id, options.object):
+                            PrintObject(object, options)
+                    elif options.reference:
+                        if object.References(options.reference):
+                            PrintObject(object, options)
+                    elif options.type:
+                        if EqualCanonical(object.GetType(), optionsType):
+                            PrintObject(object, options)
+                    elif options.hash:
+                        print('obj %d %d' % (object.id, object.version))
+                        rawContent = FormatOutput(object.content, True)
+                        print(' len: %d md5: %s' % (len(rawContent), hashlib.md5(rawContent).hexdigest()))
+                        print('')
+                    elif options.searchstream:
+                        if object.StreamContains(options.searchstream, not options.unfiltered, options.casesensitive, options.regex, options.overridingfilters):
+                            PrintObject(object, options)
+                    elif options.generateembedded != 0:
+                        if object.id == options.generateembedded:
+                            PrintGenerateObject(object, options, 8)
+                    else:
+                        PrintObject(object, options)
+                elif object.type == PDF_ELEMENT_MALFORMED:
+                    try:
+                        fExtract = open(options.extract, 'wb')
                         try:
-                            fExtract = open(options.extract, 'wb')
-                            try:
-                                fExtract.write(C2BIP3(object.content))
-                            except:
-                                print('Error writing file %s' % options.extract)
-                            fExtract.close()
+                            fExtract.write(C2BIP3(object.content))
                         except:
                             print('Error writing file %s' % options.extract)
-            else:
-                break
+                        fExtract.close()
+                    except:
+                        print('Error writing file %s' % options.extract)
+        else:
+            break
 
-        if options.stats:
-            print('Comment: %s' % cntComment)
-            print('XREF: %s' % cntXref)
-            print('Trailer: %s' % cntTrailer)
-            print('StartXref: %s' % cntStartXref)
-            print('Indirect object: %s' % cntIndirectObject)
-            for key in sorted(dicObjectTypes.keys()):
-                print(' %s %d: %s' % (key, len(dicObjectTypes[key]), ', '.join(map(lambda x: '%d' % x, dicObjectTypes[key]))))
+    if options.stats:
+        print('Comment: %s' % cntComment)
+        print('XREF: %s' % cntXref)
+        print('Trailer: %s' % cntTrailer)
+        print('StartXref: %s' % cntStartXref)
+        print('Indirect object: %s' % cntIndirectObject)
+        for key in sorted(dicObjectTypes.keys()):
+            print(' %s %d: %s' % (key, len(dicObjectTypes[key]), ', '.join(map(lambda x: '%d' % x, dicObjectTypes[key]))))
 
-        if options.generate or options.generateembedded != 0:
-            print("    oPDF.xrefAndTrailer('%s')" % ' '.join(savedRoot))
-            print('')
-            print("if __name__ == '__main__':")
-            print('    Main()')
+    if options.generate or options.generateembedded != 0:
+        print("    oPDF.xrefAndTrailer('%s')" % ' '.join(savedRoot))
+        print('')
+        print("if __name__ == '__main__':")
+        print('    Main()')
 
 def TestPythonVersion(enforceMaximumVersion=False, enforceMinimumVersion=False):
     if sys.version_info[0:3] > __maximum_python_version__:

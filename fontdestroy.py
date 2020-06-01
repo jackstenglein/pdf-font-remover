@@ -1,10 +1,21 @@
 import optparse
+import os
+import sys
+
+import destroyer
 
 __description__ = 'pdf-parser, use it to parse a PDF document'
 __version__ = '0.7.4'
 __minimum_python_version__ = (2, 5, 1)
 __maximum_python_version__ = (3, 7, 5)
 
+
+def GetArguments():
+    arguments = sys.argv[1:]
+    envvar = os.getenv('PDFPARSER_OPTIONS')
+    if envvar == None:
+        return arguments
+    return envvar.split(' ') + arguments
 
 def Main():
     """Main handles reading flags/arguments from the command line, and passes those to the runner."""
@@ -43,6 +54,9 @@ def Main():
         print('')
         print('  %s' % __description__)
         return
+
+    fontDestroyer = destroyer.FontDestroyer(options)
+    fontDestroyer.UpdatePDF(args[0])
 
 
 def TestPythonVersion(enforceMaximumVersion=False, enforceMinimumVersion=False):
