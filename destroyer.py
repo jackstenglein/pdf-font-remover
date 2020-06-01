@@ -75,7 +75,7 @@ class FontDestroyer:
         decoders = []
         runner.LoadDecoders(self.options.decoders, True)
 
-        oPDFParser = parser.cPDFParser(document, self.verbose, self.extract)
+        oPDFParser = parser.Parser(document, self.verbose, self.extract)
         dicObjectTypes = {}
 
     

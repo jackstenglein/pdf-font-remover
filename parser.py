@@ -190,6 +190,125 @@ class Tokenizer:
         self.ungetted.append(token)
 
 
+class Parser:
+    def __init__(self, file, verbose=False, extract=None, objstm=None):
+        self.context = CONTEXT_NONE
+        self.content = []
+        self.tokenizer = Tokenizer(file)
+        self.verbose = verbose
+        self.extract = extract
+        self.objstm = objstm
+
+    def GetObject(self):
+        token = ""
+        obj = None
+
+        while (token != None) and (obj == None):
+            if self.context == CONTEXT_OBJ:
+                token = self.tokenizer.Token()
+            else:
+                token = self.tokenizer.TokenIgnoreWhiteSpace()
+
+            obj = self.HandleToken(token)
+        
+        # print("Returning object: ", obj)
+        return obj     
+
+    def HandleDelimiter(self, token):
+        if token[1][0] == '%':
+            if self.context == CONTEXT_OBJ:
+                self.content.append(token)
+                return None
+            return runner.cPDFElementComment(token[1])
+
+        if self.context == CONTEXT_NONE:
+            return None
+        
+        finalToken = token
+        if token[1] == '/':
+            nextToken = self.tokenizer.Token()
+            if nextToken[0] == CHAR_REGULAR:
+                finalToken = (CHAR_DELIMITER, token[1] + nextToken[1])
+            else:
+                self.tokenizer.unget(nextToken)
+    
+        self.content.append(finalToken)
+        return None
+
+    def HandleRegular(self, token):
+        if self.context == CONTEXT_OBJ:
+            if token[1] == 'endobj':
+                self.oPDFElementIndirectObject = runner.cPDFElementIndirectObject(self.objectId, self.objectVersion, self.content, self.objstm)
+                self.context = CONTEXT_NONE
+                self.content = []
+                return self.oPDFElementIndirectObject
+            self.content.append(token)
+            return None
+        
+        if self.context == CONTEXT_TRAILER:
+            if token[1] == 'startxref' or token[1] == 'xref':
+                self.oPDFElementTrailer = runner.cPDFElementTrailer(self.content)
+                self.tokenizer.unget(token)
+                self.context = CONTEXT_NONE
+                self.content = []
+                return self.oPDFElementTrailer
+            self.content.append(token)
+            return None
+
+        if runner.IsNumeric(token[1]):
+            token2 = self.tokenizer.TokenIgnoreWhiteSpace()
+            if runner.IsNumeric(token2[1]):
+                token3 = self.tokenizer.TokenIgnoreWhiteSpace()
+                if token3[1] == 'obj':
+                    self.objectId = int(token[1], 10)
+                    self.objectVersion = int(token2[1], 10)
+                    self.context = CONTEXT_OBJ
+                    return None
+                self.tokenizer.unget(token3)
+            self.tokenizer.unget(token2)
+            return None
+        
+        if token[1] == 'trailer':
+            self.context = CONTEXT_TRAILER
+            self.content = [token]
+            return None
+        
+        if token[1] == 'xref':
+            self.context = CONTEXT_XREF
+            self.content = [token]
+            return None
+
+        if token[1] == 'startxref':
+            token2 = self.tokenizer.TokenIgnoreWhiteSpace()
+            if token2 and runner.IsNumeric(token2[1]):
+                return runner.cPDFElementStartxref(int(token2[1], 10))
+            self.tokenizer.unget(token2)
+            return None
+        
+        print("Malformed PDF??")
+        return None
+
+
+    def HandleToken(self, token):
+        if token == None:
+            return None
+
+        if token[0] == CHAR_DELIMITER:
+            return self.HandleDelimiter(token)
+
+        if token[0] == CHAR_WHITESPACE:
+            return self.HandleWhitespace(token)
+
+        return self.HandleRegular(token)
+
+
+    def HandleWhitespace(self, token):
+        if self.context != CONTEXT_NONE:
+            self.content.append(token)
+        return None 
+    
+
+
 class cPDFParser:
     def __init__(self, file, verbose=False, extract=None, objstm=None):
         self.context = CONTEXT_NONE
