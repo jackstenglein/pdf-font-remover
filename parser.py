@@ -1,6 +1,7 @@
 from io import StringIO
 import sys
 import runner
+import pdf_objects
 
 CHAR_WHITESPACE = 1
 CHAR_DELIMITER = 2
@@ -219,7 +220,7 @@ class Parser:
             if self.context == CONTEXT_OBJ:
                 self.content.append(token)
                 return None
-            return runner.cPDFElementComment(token[1])
+            return pdf_objects.Comment(token[1])
 
         if self.context == CONTEXT_NONE:
             return None
@@ -247,7 +248,7 @@ class Parser:
         
         if self.context == CONTEXT_TRAILER:
             if token[1] == 'startxref' or token[1] == 'xref':
-                self.oPDFElementTrailer = runner.cPDFElementTrailer(self.content)
+                self.oPDFElementTrailer = pdf_objects.Trailer(self.content)
                 self.tokenizer.unget(token)
                 self.context = CONTEXT_NONE
                 self.content = []
@@ -257,7 +258,7 @@ class Parser:
 
         if self.context == CONTEXT_XREF:
             if token[1] == 'trailer' or token[1] == 'xref':
-                self.oPDFElementXref = runner.cPDFElementXref(self.content)
+                self.oPDFElementXref = pdf_objects.Xref(self.content)
                 self.tokenizer.unget(token)
                 self.context = CONTEXT_NONE
                 self.content = []
@@ -291,7 +292,7 @@ class Parser:
         if token[1] == 'startxref':
             token2 = self.tokenizer.TokenIgnoreWhiteSpace()
             if token2 and runner.IsNumeric(token2[1]):
-                return runner.cPDFElementStartxref(int(token2[1], 10))
+                return pdf_objects.Startxref(int(token2[1], 10))
             self.tokenizer.unget(token2)
             return None
         
