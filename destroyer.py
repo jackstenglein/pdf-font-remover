@@ -63,6 +63,58 @@ class FontDestroyer:
             if self.options.search or self.options.key or self.options.reference:
                 self.selectTrailer = True
 
+    @staticmethod
+    def FormatFont(obj):
+        # Remove /Encoding {EncodingValue}
+        if obj.id == 299:
+            print('Object content before formatting: ', obj.content)
+
+        # encoding = (CHAR_DELIMITER, '/Encoding')
+        # if encoding in obj.content:
+        #     index = obj.content.index(encoding)
+        #     obj.content.pop(index)  # Removes '/Encoding'
+        #     obj.content.pop(index)  # Removes ' '
+        #     obj.content.pop(index)  # Removes {EncodingValue}
+
+        # # Change /Subtype {FontType} to /Subtype /TrueType
+        # subtype = (CHAR_DELIMITER, '/Subtype')
+        # if subtype in obj.content:
+        #     index = obj.content.index(subtype)
+        #     obj.content[index + 2] = (CHAR_DELIMITER, '/TrueType')
+
+        # Add /ToUnicode 524 0 R
+        emptyToUnicode = [(CHAR_REGULAR, '/ToUnicode'), (CHAR_WHITESPACE, ' '), (CHAR_REGULAR, '524'), (CHAR_WHITESPACE, ' '), (CHAR_REGULAR, '0'), \
+            (CHAR_WHITESPACE, ' '), (CHAR_REGULAR, 'R'), (CHAR_WHITESPACE, ' ')]
+        for token in emptyToUnicode:
+            obj.content.insert(len(obj.content) - 2, token)
+        
+        if obj.id == 299:
+            print('Object content after formatting: ', obj.content)
+
+        return FontDestroyer.FormatOutput(obj.content, True)
+
+    @staticmethod
+    def FormatObject(obj):
+        if runner.EqualCanonical(obj.GetType(), "/Font"):
+            # print("Writing out Font. Content: ", obj.content)
+            return FontDestroyer.FormatFont(obj)
+        else:
+            return FontDestroyer.FormatOutput(obj.content, True)
+
+    @staticmethod
+    def FormatOutput(data, raw):
+        if raw:
+            if type(data) == type([]):
+                return ''.join(map(lambda x: x[1], data))
+            else:
+                return data
+        elif sys.version_info[0] > 2:
+            return ascii(data)
+        else:
+            return repr(data)
+
+    
+
 
     def UpdatePDF(self, document):
         """pdf-parser, use it to parse a PDF document
@@ -77,8 +129,8 @@ class FontDestroyer:
 
         oPDFParser = parser.Parser(document, self.verbose, self.extract)
         dicObjectTypes = {}
-        # writer = write.Writer("font-output.pdf")
-        # savedRoot = ['1', '0', 'R']
+        writer = write.Writer("font-output.pdf", FontDestroyer.FormatObject)
+        savedRoot = ['1', '0', 'R']
 
     
         # if self.generate:
@@ -140,15 +192,18 @@ class FontDestroyer:
                 break
 
             # Handle writing to PDF file
-            # if object.type == PDF_ELEMENT_COMMENT:
-            #     writer.writeComment(object)
+            if object.type == PDF_ELEMENT_COMMENT:
+                writer.writeComment(object)
 
-            # elif object.type == PDF_ELEMENT_TRAILER:
-            #     oPDFParseDictionary = runner.cPDFParseDictionary(object.content[1:], self.options.nocanonicalizedoutput)
-            #     result = oPDFParseDictionary.Get('/Root')
-            #     if result != None:
-            #         savedRoot = result
+            elif object.type == PDF_ELEMENT_TRAILER:
+                oPDFParseDictionary = runner.cPDFParseDictionary(object.content[1:], self.options.nocanonicalizedoutput)
+                result = oPDFParseDictionary.Get('/Root')
+                if result != None:
+                    savedRoot = result
             
+            elif object.type == PDF_ELEMENT_INDIRECT_OBJECT:
+                writer.writeObject(object)
+
             # Handle printing to console
             if object.type == PDF_ELEMENT_COMMENT:
                 print('PDF Comment %s' % runner.FormatOutput(object.comment, self.options.raw))
@@ -170,19 +225,15 @@ class FontDestroyer:
                     oPDFParseDictionary.PrettyPrint('  ')
                 print('')
                     
-
             elif object.type == PDF_ELEMENT_STARTXREF and self.selectStartXref:
                 print('startxref %d' % object.index)
                 print('')
 
             elif object.type == PDF_ELEMENT_INDIRECT_OBJECT and self.selectIndirectObject:
-                
-                if self.options.type:
-                    if runner.EqualCanonical(object.GetType(), self.optionsType):
-                        runner.PrintObject(object, self.options)
-
-                else:
+                if runner.EqualCanonical(object.GetType(), "/Font"):
                     runner.PrintObject(object, self.options)
+                # else:
+                #     runner.PrintObject(object, self.options)
 
             # elif object.type == PDF_ELEMENT_MALFORMED:
             #     try:
@@ -194,8 +245,12 @@ class FontDestroyer:
             #         fExtract.close()
             #     except:
             #         print('Error writing file %s' % self.options.extract)
+
+        with open('EmptyToUnicode.txt', 'r') as f:
+            emptyToUnicode = f.read()
+            writer.writeIndirectObject(524, 0, emptyToUnicode)
             
-        # writer.writeXrefAndTrailer(' '.join(savedRoot))
+        writer.writeXrefAndTrailer(' '.join(savedRoot))
 
         # if self.options.generate or self.options.generateembedded != 0:
         #     print("    oPDF.xrefAndTrailer('%s')" % ' '.join(savedRoot))

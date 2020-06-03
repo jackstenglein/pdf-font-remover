@@ -402,8 +402,10 @@ class cPDFParseDictionary:
             self.parsed = None
         elif self.isOpenDictionary(dataTrimmed[0]) and (self.isCloseDictionary(dataTrimmed[-1]) or self.couldBeCloseDictionary(dataTrimmed[-1])):
             self.parsed = self.ParseDictionary(dataTrimmed)[0]
+            # self.parsed.append(('/ToUnicode', ['-1', ' ', '0', ' ', 'R', ' ']))
         else:
             self.parsed = None
+        # print("self.parsed: ", self.parsed)
 
     def isOpenDictionary(self, token):
         return token[0] == CHAR_DELIMITER and token[1] == '<<'
@@ -610,7 +612,9 @@ def PrintOutputObject(object, options):
             if stream != []:
                 print(' %s' % FormatOutput(stream, options.raw))
         else:
+            print('Printing the contents')
             print(''.join([token[1] for token in object.content]))
+            print('Finished printing the contents')
 
 
     if options.dump:

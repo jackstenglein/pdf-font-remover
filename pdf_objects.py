@@ -13,12 +13,18 @@ class Comment:
     def __repr__(self):
         return self.comment
 
+    def GetType(self):
+        return 'Comment'
+
 
 
 class Startxref:
     def __init__(self, index):
         self.type = PDF_ELEMENT_STARTXREF
         self.index = index
+
+    def GetType(self):
+        return 'Startxref'
 
 
 
@@ -36,7 +42,13 @@ class Trailer:
                 data += Canonicalize(self.content[i][1])
         return data.upper().find(keyword.upper()) != -1
 
+    def GetType(self):
+        return 'Trailer'
+
 class Xref:
     def __init__(self, content):
         self.type = PDF_ELEMENT_XREF
         self.content = content
+
+    def GetType(self):
+        return 'Xref'
