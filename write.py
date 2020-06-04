@@ -78,8 +78,9 @@ class Writer:
         self.appendBinary(streamdata)
         self.appendString("\nendstream\nendobj\n")
 
-    def writeXrefAndTrailer(self, root, info=None):
+    def writeXrefAndTrailer(self, rootId, rootVersion, info=None):
         xrefdata = self.writeXref()
+        root = ("%d %d R") % (rootId, rootVersion)
         self.writeTrailer(xrefdata[0], xrefdata[1], root, info)
 
     def writeTrailer(self, startxref, size, root, info=None):

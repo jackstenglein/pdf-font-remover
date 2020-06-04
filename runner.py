@@ -402,7 +402,6 @@ class cPDFParseDictionary:
             self.parsed = None
         elif self.isOpenDictionary(dataTrimmed[0]) and (self.isCloseDictionary(dataTrimmed[-1]) or self.couldBeCloseDictionary(dataTrimmed[-1])):
             self.parsed = self.ParseDictionary(dataTrimmed)[0]
-            # self.parsed.append(('/ToUnicode', ['-1', ' ', '0', ' ', 'R', ' ']))
         else:
             self.parsed = None
         # print("self.parsed: ", self.parsed)
