@@ -210,10 +210,7 @@ class FontDestroyer:
                 print('')
 
             elif object.type == PDF_ELEMENT_XREF and self.selectXref:
-                if self.options.debug:
-                    print('xref %s' % runner.FormatOutput(object.content, self.options.raw))
-                else:
-                    print('xref')
+                print('xref %s' % runner.FormatOutput(object.content, self.options.raw))
                 print('')
 
             elif object.type == PDF_ELEMENT_TRAILER and self.selectTrailer:
@@ -229,9 +226,8 @@ class FontDestroyer:
                 print('startxref %d' % object.index)
                 print('')
 
-            elif object.type == PDF_ELEMENT_INDIRECT_OBJECT and self.selectIndirectObject:
-                if runner.EqualCanonical(object.GetType(), "/Font"):
-                    runner.PrintObject(object, self.options)
+            elif object.type == PDF_ELEMENT_INDIRECT_OBJECT:
+                runner.PrintObject(object, self.options)
                 # else:
                 #     runner.PrintObject(object, self.options)
 
