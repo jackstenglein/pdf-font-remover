@@ -322,7 +322,10 @@ class cPDFElementIndirectObject:
                     data += self.content[i][1]
                 state = 'stream-concat'
             elif state == 'stream-concat':
-                if self.content[i][0] == CHAR_REGULAR and self.content[i][1] == 'endstream':
+                if 'endstream' in self.content[i][1]:
+                    index = self.content[i][1].index('endstream')
+                    data += self.content[i][1][:index]
+
                     if filter:
                         if overridingfilters == '':
                             return self.Decompress(data, filters)
