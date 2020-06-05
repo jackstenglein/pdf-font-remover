@@ -1,7 +1,7 @@
 from io import StringIO
 import sys
-import runner
 import pdf_objects
+import re
 
 CHAR_WHITESPACE = 1
 CHAR_DELIMITER = 2
@@ -18,6 +18,10 @@ PDF_ELEMENT_XREF = 3
 PDF_ELEMENT_TRAILER = 4
 PDF_ELEMENT_STARTXREF = 5
 PDF_ELEMENT_MALFORMED = 6
+
+def IsNumeric(str):
+    return re.match('^[0-9]+', str)
+
 
 class Document:
     """
@@ -264,9 +268,9 @@ class Parser:
             self.content.append(token)
             return None
 
-        if runner.IsNumeric(token[1]):
+        if IsNumeric(token[1]):
             token2 = self.tokenizer.TokenIgnoreWhiteSpace()
-            if runner.IsNumeric(token2[1]):
+            if IsNumeric(token2[1]):
                 token3 = self.tokenizer.TokenIgnoreWhiteSpace()
                 if token3[1] == 'obj':
                     self.objectId = int(token[1], 10)
@@ -289,7 +293,7 @@ class Parser:
 
         if token[1] == 'startxref':
             token2 = self.tokenizer.TokenIgnoreWhiteSpace()
-            if token2 and runner.IsNumeric(token2[1]):
+            if token2 and IsNumeric(token2[1]):
                 return pdf_objects.Startxref(int(token2[1], 10))
             self.tokenizer.unget(token2)
             return None

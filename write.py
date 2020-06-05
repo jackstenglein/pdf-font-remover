@@ -1,8 +1,30 @@
 import sys
 import zlib
 import platform
-import runner
 import re
+
+#Convert 2 Bytes If Python 3
+def C2BIP3(string):
+    if sys.version_info[0] > 2:
+        if type(string) == bytes:
+            return string
+        else:
+            return bytes([ord(x) for x in string])
+    else:
+        return string
+
+
+def FormatOutput(data, raw):
+        if raw:
+            if type(data) == type([]):
+                return ''.join(map(lambda x: x[1], data))
+            else:
+                return data
+        elif sys.version_info[0] > 2:
+            return ascii(data)
+        else:
+            return repr(data)
+
 
 def SplitByLength(input, length):
     result = []
@@ -11,6 +33,7 @@ def SplitByLength(input, length):
         input = input[length:]
     result.append(input + '>')
     return result
+
 
 class Writer:
     def __init__(self, filename, formatFunc):
@@ -25,7 +48,7 @@ class Writer:
 
     def appendBinary(self, str):
         fPDF = open(self.filename, 'ab')
-        fPDF.write(runner.C2BIP3(str))
+        fPDF.write(C2BIP3(str))
         fPDF.close()
     
     def appendString(self, str):
@@ -54,7 +77,7 @@ class Writer:
             decompressed = object.Stream()
             # print("Decompressed stream: ", decompressed)
 
-            dictionary = runner.FormatOutput(dataPrecedingStream, True)
+            dictionary = FormatOutput(dataPrecedingStream, True)
             dictionary = re.sub(r'/Length\s+\d+', '', dictionary)
             dictionary = re.sub(r'/Filter\s*/[a-zA-Z0-9]+', '', dictionary)
             dictionary = re.sub(r'/Filter\s*\[.+\]', '', dictionary)
@@ -62,7 +85,6 @@ class Writer:
             dictionary = re.sub(r'>>\s*$', '', dictionary)
             dictionary = dictionary.strip()            
             self.stream2(object.id, object.version, decompressed.rstrip(), dictionary, "f")
-            # self.writeStream(object.id, object.version, object.Stream(False, False).rstrip(), re.sub('/Length\s+\d+', '/Length %d', runner.FormatOutput(dataPrecedingStream, True)).strip())
         else:
             self.writeIndirectObject(object.id, object.version, self.formatFunc(object).strip())
 
@@ -157,7 +179,7 @@ class Writer:
                 else:
                     filter.insert(0, "/AHx")
             elif i.lower() == "f":
-                encodeddata = zlib.compress(runner.C2BIP3(encodeddata))
+                encodeddata = zlib.compress(C2BIP3(encodeddata))
                 if i == "f":
                     filter.insert(0, "/FlateDecode")
                 else:

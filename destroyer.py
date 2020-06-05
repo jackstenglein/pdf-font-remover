@@ -1,7 +1,8 @@
 
 import parser
 import write
-import runner
+import pdf_objects
+import sys
 from io import StringIO
 import re
 
@@ -15,6 +16,14 @@ PDF_ELEMENT_XREF = 3
 PDF_ELEMENT_TRAILER = 4
 PDF_ELEMENT_STARTXREF = 5
 PDF_ELEMENT_MALFORMED = 6
+
+#Convert 2 String If Python 3
+def C2SIP3(bytes):
+    if sys.version_info[0] > 2:
+        return ''.join([chr(byte) for byte in bytes])
+    else:
+        return bytes
+
 
 class FontDestroyer:
     """
@@ -39,7 +48,7 @@ class FontDestroyer:
 
     @staticmethod
     def FormatObject(obj):
-        if runner.EqualCanonical(obj.GetType(), "/Font"):
+        if obj.GetType() == "/Font":
             return FontDestroyer.FormatFont(obj)
         else:
             return FontDestroyer.FormatOutput(obj.content, True)
@@ -73,17 +82,19 @@ class FontDestroyer:
                 if object == None:
                     oPDFParserOBJSTM = None
                     object = oPDFParser.GetObject()
-                
+
+            if object == None:
+                break
             
-            if hasattr(object, 'GetType') and runner.EqualCanonical(object.GetType(), '/ObjStm') and object.ContainsStream():
+            if object.GetType() == '/ObjStm' and object.ContainsStream():
                 # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then itself parsed
-                oPDFParseDictionary = runner.cPDFParseDictionary(object.ContainsStream(), False)
+                oPDFParseDictionary = pdf_objects.ParseDictionary(object.ContainsStream(), False)
                 numberOfObjects = int(oPDFParseDictionary.Get('/N')[0])
                 offsetFirstObject = int(oPDFParseDictionary.Get('/First')[0])
-                indexes = list(map(int, runner.C2SIP3(object.Stream())[:offsetFirstObject].strip().split(' ')))
+                indexes = list(map(int, C2SIP3(object.Stream())[:offsetFirstObject].strip().split(' ')))
                 if len(indexes) % 2 != 0 or len(indexes) / 2 != numberOfObjects:
                     raise Exception('Error in index of /ObjStm stream')
-                streamObject = runner.C2SIP3(object.Stream()[offsetFirstObject:])
+                streamObject = C2SIP3(object.Stream()[offsetFirstObject:])
                 synthesizedPDF = ''
                 while len(indexes) > 0:
                     objectNumber = indexes[0]
@@ -96,8 +107,6 @@ class FontDestroyer:
                     synthesizedPDF += '%d 0 obj\n%s\nendobj\n' % (objectNumber, streamObject[offset:offsetNextObject])
                 oPDFParserOBJSTM = parser.Parser(StringIO(synthesizedPDF), (object.id, object.version))
 
-            if object == None:
-                break
 
             # Handle writing to PDF file
             if object.type == PDF_ELEMENT_COMMENT:
@@ -106,7 +115,7 @@ class FontDestroyer:
             # If we see a trailer object, try to get the root value from it. If that fails for some reason, stick with
             # the root value pulled from the catalog object
             elif object.type == PDF_ELEMENT_TRAILER:
-                oPDFParseDictionary = runner.cPDFParseDictionary(object.content[1:], False)
+                oPDFParseDictionary = pdf_objects.ParseDictionary(object.content[1:], False)
                 result = oPDFParseDictionary.Get('/Root')
                 if result != None and len(result) > 1:
                     try:
@@ -114,7 +123,7 @@ class FontDestroyer:
                         objectVersion = int(result[1])
                         rootId = objectId
                         rootVersion = objectVersion
-                        print("Got root from trailer")
+                        # print("Got root from trailer")
                     except ValueError:
                         pass
             
@@ -122,7 +131,7 @@ class FontDestroyer:
                 writer.writeObject(object)
 
             # Search for document catalog to use as root reference
-            if runner.EqualCanonical(object.GetType(), "/Catalog"):
+            if object.GetType() == "/Catalog":
                 # print("Found object catalog: %d %d R" % (object.id, object.version))
                 rootId = object.id
                 rootVersion = object.version
