@@ -9,11 +9,6 @@ CHAR_WHITESPACE = 1
 CHAR_DELIMITER = 2
 CHAR_REGULAR = 3
 
-CONTEXT_NONE = 1
-CONTEXT_OBJ = 2
-CONTEXT_XREF = 3
-CONTEXT_TRAILER = 4
-
 PDF_ELEMENT_COMMENT = 1
 PDF_ELEMENT_INDIRECT_OBJECT = 2
 PDF_ELEMENT_XREF = 3
@@ -30,38 +25,7 @@ class FontDestroyer:
         """
         __init__ constructs the necessary attributes for a new FontDestroyer.
         """
-        self.options = options
-
-        self.countComment = 0
-        self.countXref = 0
-        self.countTrailer = 0
-        self.countStartXref = 0
-        self.countIndirectObject = 0
-
-        self.verbose = self.options.verbose
-        self.extract = self.options.extract
-        self.generate = self.options.generate
-
-        if self.options.type == '-':
-            self.optionsType = ''
-        else:
-            self.optionsType = self.options.type
-
-        if self.options.elements:
-            self.selectComment = ('c' in elements)
-            self.selectXref = ('x' in elements)
-            self.selectTrailer = ('t' in elements)
-            self.selectStartXref = ('s' in elements)
-            self.selectIndirectObject = ('i' in elements)
-        else:
-            self.selectIndirectObject = True
-            if not self.options.search and not self.options.object and not self.options.reference and not self.options.type and not self.options.searchstream and not self.options.key:
-                self.selectComment = True
-                self.selectXref = True
-                self.selectTrailer = True
-                self.selectStartXref = True
-            if self.options.search or self.options.key or self.options.reference:
-                self.selectTrailer = True
+        self.print = options.print
 
     @staticmethod
     def FormatFont(obj):
@@ -92,13 +56,10 @@ class FontDestroyer:
         else:
             return repr(data)
 
-    
-
-
     def UpdatePDF(self, document):
         """pdf-parser, use it to parse a PDF document
         """
-        oPDFParser = parser.Parser(document, self.verbose, self.extract)
+        oPDFParser = parser.Parser(document)
         writer = write.Writer("font-output.pdf", FontDestroyer.FormatObject)
         rootId = None
         rootVersion = None
@@ -114,9 +75,9 @@ class FontDestroyer:
                     object = oPDFParser.GetObject()
                 
             
-            if self.options.objstm and hasattr(object, 'GetType') and runner.EqualCanonical(object.GetType(), '/ObjStm') and object.ContainsStream():
+            if hasattr(object, 'GetType') and runner.EqualCanonical(object.GetType(), '/ObjStm') and object.ContainsStream():
                 # parsing objects inside an /ObjStm object by extracting & parsing the stream content to create a synthesized PDF document, that is then itself parsed
-                oPDFParseDictionary = runner.cPDFParseDictionary(object.ContainsStream(), self.options.nocanonicalizedoutput)
+                oPDFParseDictionary = runner.cPDFParseDictionary(object.ContainsStream(), False)
                 numberOfObjects = int(oPDFParseDictionary.Get('/N')[0])
                 offsetFirstObject = int(oPDFParseDictionary.Get('/First')[0])
                 indexes = list(map(int, runner.C2SIP3(object.Stream())[:offsetFirstObject].strip().split(' ')))
@@ -133,7 +94,7 @@ class FontDestroyer:
                     else:
                         offsetNextObject = len(streamObject)
                     synthesizedPDF += '%d 0 obj\n%s\nendobj\n' % (objectNumber, streamObject[offset:offsetNextObject])
-                oPDFParserOBJSTM = parser.Parser(StringIO(synthesizedPDF), self.options.verbose, self.options.extract, (object.id, object.version))
+                oPDFParserOBJSTM = parser.Parser(StringIO(synthesizedPDF), (object.id, object.version))
 
             if object == None:
                 break
@@ -145,7 +106,7 @@ class FontDestroyer:
             # If we see a trailer object, try to get the root value from it. If that fails for some reason, stick with
             # the root value pulled from the catalog object
             elif object.type == PDF_ELEMENT_TRAILER:
-                oPDFParseDictionary = runner.cPDFParseDictionary(object.content[1:], self.options.nocanonicalizedoutput)
+                oPDFParseDictionary = runner.cPDFParseDictionary(object.content[1:], False)
                 result = oPDFParseDictionary.Get('/Root')
                 if result != None and len(result) > 1:
                     try:
@@ -162,37 +123,13 @@ class FontDestroyer:
 
             # Search for document catalog to use as root reference
             if runner.EqualCanonical(object.GetType(), "/Catalog"):
-                print("Found object catalog: %d %d R" % (object.id, object.version))
+                # print("Found object catalog: %d %d R" % (object.id, object.version))
                 rootId = object.id
                 rootVersion = object.version
 
-            # Handle printing to console
-            # if object.type == PDF_ELEMENT_COMMENT:
-            #     print('PDF Comment %s' % runner.FormatOutput(object.comment, self.options.raw))
-            #     print('')
-
-            # elif object.type == PDF_ELEMENT_XREF:
-            #     print('xref %s' % runner.FormatOutput(object.content, self.options.raw))
-            #     print('')
-
-            # elif object.type == PDF_ELEMENT_TRAILER:
-            #     oPDFParseDictionary = runner.cPDFParseDictionary(object.content[1:], self.options.nocanonicalizedoutput)
-            #     if oPDFParseDictionary == None:
-            #         print('trailer %s' % runner.FormatOutput(object.content, self.options.raw))
-            #     else:
-            #         print('trailer')
-            #         oPDFParseDictionary.PrettyPrint('  ')
-            #     print('')
-                    
-            # elif object.type == PDF_ELEMENT_STARTXREF:
-            #     print('startxref %d' % object.index)
-            #     print('')
-
-            # elif object.type == PDF_ELEMENT_INDIRECT_OBJECT:
-            #     runner.PrintObject(object, self.options)
+            if self.print:
+                object.Print()
             
-
-
 
         if rootId == None or rootVersion == None:
             print('ERROR: Failed to find document catalog')
@@ -202,12 +139,4 @@ class FontDestroyer:
             emptyToUnicode = f.read()
             writer.writeIndirectObject(524, 0, emptyToUnicode)
             
-
-
         writer.writeXrefAndTrailer(rootId, rootVersion)
-
-        # if self.options.generate or self.options.generateembedded != 0:
-        #     print("    oPDF.xrefAndTrailer('%s')" % ' '.join(savedRoot))
-        #     print('')
-        #     print("if __name__ == '__main__':")
-        #     print('    Main()')

@@ -192,12 +192,10 @@ class Tokenizer:
 
 
 class Parser:
-    def __init__(self, file, verbose=False, extract=None, objstm=None):
+    def __init__(self, file, objstm=None):
         self.context = CONTEXT_NONE
         self.content = []
         self.tokenizer = Tokenizer(file)
-        self.verbose = verbose
-        self.extract = extract
         self.objstm = objstm
 
     def GetObject(self):
@@ -239,7 +237,7 @@ class Parser:
     def HandleRegular(self, token):
         if self.context == CONTEXT_OBJ:
             if token[1] == 'endobj':
-                self.oPDFElementIndirectObject = runner.cPDFElementIndirectObject(self.objectId, self.objectVersion, self.content, self.objstm)
+                self.oPDFElementIndirectObject = pdf_objects.IndirectObject(self.objectId, self.objectVersion, self.content, self.objstm)
                 self.context = CONTEXT_NONE
                 self.content = []
                 return self.oPDFElementIndirectObject

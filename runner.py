@@ -380,6 +380,23 @@ class cPDFElementIndirectObject:
         else:
             return data
 
+    def Print(self):
+        print('obj %d %d' % (self.id, self.version))
+        if self.objstm != None:
+            print(' Containing /ObjStm: %d %d' % self.objstm)
+        print(' Type: %s' % ConditionalCanonicalize(self.GetType(), False))
+        print(' Referencing: %s' % ', '.join(map(lambda x: '%s %s %s' % x, self.GetReferences())))
+        dataPrecedingStream = self.ContainsStream()
+        oPDFParseDictionary = None
+        if dataPrecedingStream:
+            print(' Contains stream')
+            oPDFParseDictionary = cPDFParseDictionary(dataPrecedingStream, False)
+        else:
+            oPDFParseDictionary = cPDFParseDictionary(self.content, False)
+        print('')
+        oPDFParseDictionary.PrettyPrint('  ')
+        print('')
+
 
 class cPDFElementMalformed:
     def __init__(self, content):
