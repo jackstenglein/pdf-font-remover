@@ -74,17 +74,9 @@ class Writer:
     def writeObject(self, object):
         dataPrecedingStream = object.ContainsStream()
         if dataPrecedingStream:
-            decompressed = object.Stream()
-            # print("Decompressed stream: ", decompressed)
-
+            compressed = object.Stream(False)
             dictionary = FormatOutput(dataPrecedingStream, True)
-            dictionary = re.sub(r'/Length\s+\d+', '', dictionary)
-            dictionary = re.sub(r'/Filter\s*/[a-zA-Z0-9]+', '', dictionary)
-            dictionary = re.sub(r'/Filter\s*\[.+\]', '', dictionary)
-            dictionary = re.sub(r'^\s*<<', '', dictionary)
-            dictionary = re.sub(r'>>\s*$', '', dictionary)
-            dictionary = dictionary.strip()            
-            self.stream2(object.id, object.version, decompressed.rstrip(), dictionary, "f")
+            self.writeStream(object.id, object.version, compressed, dictionary)
         else:
             self.writeIndirectObject(object.id, object.version, self.formatFunc(object).strip())
 
@@ -93,10 +85,10 @@ class Writer:
         self.indirectObjects[index] = self.filesize()
         self.appendString("%d %d obj\n%s\nendobj\n" % (index, version, io))
 
-    def writeStream(self, index, version, streamdata, dictionary="<< /Length %d >>"):
+    def writeStream(self, index, version, streamdata, dictionary):
         self.appendString("\n")
         self.indirectObjects[index] = self.filesize()
-        self.appendString(("%d %d obj\n" + dictionary + "\nstream\n") % (index, version, len(streamdata)))
+        self.appendString(("%d %d obj\n" + dictionary + "\nstream\n") % (index, version))
         self.appendBinary(streamdata)
         self.appendString("\nendstream\nendobj\n")
 
@@ -129,76 +121,3 @@ class Writer:
             else:
                 self.appendString("0000000000 65535 f%s" % eol)
         return (startxref, (max+1))
-
-#############################################################
-        
-    def binary(self):
-        self.appendString("%\xD0\xD0\xD0\xD0\n")    
-
-    def Data2HexStr(self, data):
-        hex = ''
-        if sys.version_info[0] == 2:
-            for b in data:
-                hex += "%02x" % ord(b)
-        else:
-            for b in data:
-                hex += "%02x" % b
-        return hex
-
-    def stream2(self, index, version, streamdata, entries="", filters=""):
-        """
-    * h ASCIIHexDecode
-    * H AHx
-    * i like ASCIIHexDecode but with 512 long lines
-    * I like AHx but with 512 long lines
-    * ASCII85Decode
-    * LZWDecode
-    * f FlateDecode
-    * F Fl
-    * RunLengthDecode
-    * CCITTFaxDecode
-    * JBIG2Decode
-    * DCTDecode
-    * JPXDecode
-    * Crypt
-        """
-        
-        encodeddata = streamdata
-        filter = []
-        for i in filters:
-            if i.lower() == "h":
-                encodeddata = self.Data2HexStr(encodeddata) + '>'
-                if i == "h":
-                    filter.insert(0, "/ASCIIHexDecode")
-                else:
-                    filter.insert(0, "/AHx")
-            elif i.lower() == "i":
-                encodeddata = ''.join(SplitByLength(self.Data2HexStr(encodeddata), 512))
-                if i == "i":
-                    filter.insert(0, "/ASCIIHexDecode")
-                else:
-                    filter.insert(0, "/AHx")
-            elif i.lower() == "f":
-                encodeddata = zlib.compress(C2BIP3(encodeddata))
-                if i == "f":
-                    filter.insert(0, "/FlateDecode")
-                else:
-                    filter.insert(0, "/Fl")
-            else:
-                print("Error")
-                return
-        self.appendString("\n")
-        self.indirectObjects[index] = self.filesize()
-        self.appendString("%d %d obj\n<<\n /Length %d\n" % (index, version, len(encodeddata)))
-        if len(filter) == 1:
-            self.appendString(" /Filter %s\n" % filter[0])
-        if len(filter) > 1:
-            self.appendString(" /Filter [%s]\n" % ' '.join(filter))
-        if entries != "":
-            self.appendString(" %s\n" % entries)
-        self.appendString(">>\nstream\n")
-        if filters[-1].lower() == 'i':
-            self.appendString(encodeddata)
-        else:
-            self.appendBinary(encodeddata)
-        self.appendString("\nendstream\nendobj\n")
